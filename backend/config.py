@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     SUPABASE_DB_URL: str = ""          # postgres connection string for vecs
 
     # App
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "https://*.vercel.app"]
+    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001"]
+    FRONTEND_URL: str = ""           # Set to Vercel URL in production, e.g. https://your-app.vercel.app
     CHUNK_SIZE: int = 500              # tokens per chunk
     CHUNK_OVERLAP: int = 50
     TOP_K: int = 5                     # RAG retrieval count

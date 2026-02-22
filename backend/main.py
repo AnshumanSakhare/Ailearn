@@ -23,7 +23,7 @@ _origins = list(set(settings.CORS_ORIGINS + [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
-]))
+] + ([settings.FRONTEND_URL] if settings.FRONTEND_URL else [])))
 
 app.add_middleware(
     CORSMiddleware,
