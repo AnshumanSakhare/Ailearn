@@ -18,9 +18,16 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 # CORS – allow Next.js dev server and production domain
 # ---------------------------------------------------------------------------
+# Always include common localhost origins so dev never breaks
+_origins = list(set(settings.CORS_ORIGINS + [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+]))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
