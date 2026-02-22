@@ -1,6 +1,7 @@
 """POST /generate-flashcards"""
 
 from fastapi import APIRouter, HTTPException
+from tenacity import RetryError
 
 from models.schemas import FlashcardRequest, FlashcardsResponse
 from services.session_store import get_session, update_session
@@ -29,7 +30,10 @@ async def create_flashcards(body: FlashcardRequest):
 
     try:
         cards = await generate_flashcards(full_text, n=12)
-    except Exception as exc:
+    except (RetryError, Exception) as exc:
+        msg = str(exc)
+        if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+            raise HTTPException(status_code=503, detail="Gemini API quota exceeded. Please check your API key at aistudio.google.com/apikey.")
         raise HTTPException(status_code=500, detail=f"Flashcard generation failed: {exc}")
 
     update_session(body.session_id, flashcards=cards)

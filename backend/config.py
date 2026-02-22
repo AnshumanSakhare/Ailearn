@@ -11,8 +11,8 @@ class Settings(BaseSettings):
 
     # Gemini
     GEMINI_API_KEY: str = ""
-    CHAT_MODEL: str = "gemini-2.0-flash"
-    EMBEDDING_MODEL: str = "models/text-embedding-004"
+    CHAT_MODEL: str = "gemini-2.5-flash"
+    EMBEDDING_MODEL: str = "models/gemini-embedding-001"
 
     # Supabase
     SUPABASE_URL: str = ""

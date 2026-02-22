@@ -1,6 +1,7 @@
 """POST /generate-quiz  +  POST /generate-quiz/evaluate"""
 
 from fastapi import APIRouter, HTTPException
+from tenacity import RetryError
 
 from models.schemas import (
     QuizRequest, QuizResponse,
@@ -28,7 +29,10 @@ async def create_quiz(body: QuizRequest):
 
     try:
         questions = await generate_quiz(full_text, n=7)
-    except Exception as exc:
+    except (RetryError, Exception) as exc:
+        msg = str(exc)
+        if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+            raise HTTPException(status_code=503, detail="Gemini API quota exceeded. Please check your API key at aistudio.google.com/apikey.")
         raise HTTPException(status_code=500, detail=f"Quiz generation failed: {exc}")
 
     update_session(body.session_id, quiz=questions)
