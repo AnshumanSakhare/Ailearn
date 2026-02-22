@@ -3,7 +3,7 @@
  * Base URL comes from NEXT_PUBLIC_API_URL env var.
  */
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
