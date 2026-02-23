@@ -11,7 +11,10 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from config import settings
 
-_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+_client = genai.Client(
+    api_key=settings.GEMINI_API_KEY,
+    http_options={"api_version": "v1"},
+)
 
 # ~4 chars per token is a reasonable approximation
 _CHARS_PER_TOKEN = 4
