@@ -1,20 +1,17 @@
 """
 Gemini embedding helper with character-based chunking.
-Uses google-genai (the current Gemini SDK).
+Uses google-generativeai (stable SDK with proven embedContent support).
 """
 
+import asyncio
 from typing import List
 
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from config import settings
 
-_client = genai.Client(
-    api_key=settings.GEMINI_API_KEY,
-    http_options={"api_version": "v1beta"},
-)
+genai.configure(api_key=settings.GEMINI_API_KEY)
 
 # ~4 chars per token is a reasonable approximation
 _CHARS_PER_TOKEN = 4
@@ -36,33 +33,43 @@ def chunk_text(text: str, size: int = None, overlap: int = None) -> List[str]:
     return chunks
 
 
+def _embed_batch(batch: List[str]) -> List[List[float]]:
+    """Synchronous batch embed using google-generativeai."""
+    result = genai.embed_content(
+        model=settings.EMBEDDING_MODEL,
+        content=batch,
+        task_type="retrieval_document",
+    )
+    # When content is a list, result["embedding"] is a list of embedding vectors
+    embeddings = result["embedding"]
+    # Normalise: single text returns a flat list, wrap it
+    if embeddings and not isinstance(embeddings[0], list):
+        embeddings = [embeddings]
+    return embeddings
+
+
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 async def embed_texts(texts: List[str]) -> List[List[float]]:
-    """Return Gemini embeddings for a list of texts (async)."""
+    """Return Gemini embeddings for a list of texts (async via thread)."""
     BATCH = 100
     all_embeddings: List[List[float]] = []
 
     for i in range(0, len(texts), BATCH):
         batch = texts[i : i + BATCH]
-        response = await _client.aio.models.embed_content(
-            model=settings.EMBEDDING_MODEL,
-            contents=batch,
-            config=types.EmbedContentConfig(
-                task_type="RETRIEVAL_DOCUMENT",
-            ),
-        )
-        all_embeddings.extend([e.values for e in response.embeddings])
+        embeddings = await asyncio.to_thread(_embed_batch, batch)
+        all_embeddings.extend(embeddings)
 
     return all_embeddings
 
 
 async def embed_query(text: str) -> List[float]:
     """Embed a single query string."""
-    response = await _client.aio.models.embed_content(
-        model=settings.EMBEDDING_MODEL,
-        contents=[text],
-        config=types.EmbedContentConfig(
-            task_type="RETRIEVAL_QUERY",
-        ),
-    )
-    return response.embeddings[0].values
+    def _run():
+        result = genai.embed_content(
+            model=settings.EMBEDDING_MODEL,
+            content=text,
+            task_type="retrieval_query",
+        )
+        return result["embedding"]
+
+    return await asyncio.to_thread(_run)
