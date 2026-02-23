@@ -13,7 +13,7 @@ from config import settings
 
 _client = genai.Client(
     api_key=settings.GEMINI_API_KEY,
-    http_options={"api_version": "v1"},
+    http_options={"api_version": "v1beta"},
 )
 
 # ~4 chars per token is a reasonable approximation
