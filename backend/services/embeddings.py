@@ -1,17 +1,18 @@
 """
 Gemini embedding helper with character-based chunking.
-Uses google-generativeai (stable SDK with proven embedContent support).
+Uses direct httpx REST calls to avoid SDK version issues.
 """
 
 import asyncio
 from typing import List
 
-import google.generativeai as genai
+import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from config import settings
 
-genai.configure(api_key=settings.GEMINI_API_KEY)
+# Google Generative Language REST endpoint (v1beta, proven to work with embedding-001)
+_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent"
 
 # ~4 chars per token is a reasonable approximation
 _CHARS_PER_TOKEN = 4
@@ -33,43 +34,30 @@ def chunk_text(text: str, size: int = None, overlap: int = None) -> List[str]:
     return chunks
 
 
-def _embed_batch(batch: List[str]) -> List[List[float]]:
-    """Synchronous batch embed using google-generativeai."""
-    result = genai.embed_content(
-        model=settings.EMBEDDING_MODEL,
-        content=batch,
-        task_type="retrieval_document",
-    )
-    # When content is a list, result["embedding"] is a list of embedding vectors
-    embeddings = result["embedding"]
-    # Normalise: single text returns a flat list, wrap it
-    if embeddings and not isinstance(embeddings[0], list):
-        embeddings = [embeddings]
-    return embeddings
+async def _embed_single(client: httpx.AsyncClient, text: str, task_type: str) -> List[float]:
+    """Embed a single text string via REST."""
+    model = settings.EMBEDDING_MODEL  # e.g. "embedding-001"
+    url = _BASE_URL.format(model=model)
+    payload = {
+        "model": f"models/{model}",
+        "content": {"parts": [{"text": text}]},
+        "taskType": task_type,
+    }
+    resp = await client.post(url, params={"key": settings.GEMINI_API_KEY}, json=payload)
+    resp.raise_for_status()
+    return resp.json()["embedding"]["values"]
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 async def embed_texts(texts: List[str]) -> List[List[float]]:
-    """Return Gemini embeddings for a list of texts (async via thread)."""
-    BATCH = 100
-    all_embeddings: List[List[float]] = []
-
-    for i in range(0, len(texts), BATCH):
-        batch = texts[i : i + BATCH]
-        embeddings = await asyncio.to_thread(_embed_batch, batch)
-        all_embeddings.extend(embeddings)
-
-    return all_embeddings
+    """Return Gemini embeddings for a list of texts."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        tasks = [_embed_single(client, t, "RETRIEVAL_DOCUMENT") for t in texts]
+        return list(await asyncio.gather(*tasks))
 
 
 async def embed_query(text: str) -> List[float]:
     """Embed a single query string."""
-    def _run():
-        result = genai.embed_content(
-            model=settings.EMBEDDING_MODEL,
-            content=text,
-            task_type="retrieval_query",
-        )
-        return result["embedding"]
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        return await _embed_single(client, text, "RETRIEVAL_QUERY")
 
-    return await asyncio.to_thread(_run)
