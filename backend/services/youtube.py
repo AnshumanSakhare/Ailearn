@@ -32,20 +32,17 @@ async def fetch_transcript(url: str) -> Tuple[str, str, Optional[int]]:
     """
     video_id = _extract_video_id(url)
 
-    # --- transcript ---
+    # --- transcript (youtube-transcript-api v0.7+ instance-based API) ---
+    ytt_api = YouTubeTranscriptApi()
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(
-            video_id, languages=["en", "en-US", "en-GB"]
-        )
+        transcript = ytt_api.fetch(video_id, languages=["en", "en-US", "en-GB"])
     except (TranscriptsDisabled, NoTranscriptFound):
-        # fallback: try auto-generated in any language
-        transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
-        transcript_list = transcripts.find_generated_transcript(
-            [t.language_code for t in transcripts]
-        ).fetch()
+        # fallback: try any available transcript
+        transcript_list = ytt_api.list(video_id)
+        transcript = next(iter(transcript_list)).fetch()
 
     transcript_text = " ".join(
-        item["text"].strip() for item in transcript_list if item.get("text")
+        snippet.text.strip() for snippet in transcript if snippet.text
     )
 
     # --- metadata via pytube (best-effort) ---
